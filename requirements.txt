@@ -1,0 +1,4 @@
+strands-agents
+google-genai
+requests
+python-dotenv
