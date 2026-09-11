@@ -4,6 +4,7 @@ import requests
 from scanner import search_github_opportunities
 from job_scanner import search_job_opportunities
 
+
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
@@ -18,43 +19,61 @@ def send_telegram(message):
             "text": message,
             "disable_web_page_preview": False,
         },
+        timeout=30,
     )
 
     response.raise_for_status()
 
 
-def format_opportunity(opportunity):
+def format_github_opportunity(opportunity):
     return (
-        f"🐛 NEW OPPORTUNITY\n\n"
+        f"🐛 NEW GITHUB OPPORTUNITY\n\n"
         f"🎯 {opportunity['title']}\n\n"
-        f"📦 Source: {opportunity.get('source', 'Unknown')}\n"
+        f"📦 Source: GitHub\n"
         f"💰 Reward: {opportunity.get('reward', 'Not specified')}\n\n"
         f"🔗 {opportunity['html_url']}"
     )
 
 
+def format_job_opportunity(opportunity):
+    return (
+        f"🐛 NEW JOB OPPORTUNITY\n\n"
+        f"🎯 {opportunity['title']}\n\n"
+        f"🏢 Company: {opportunity.get('company', 'Unknown')}\n"
+        f"📦 Source: {opportunity.get('source', 'Unknown')}\n"
+        f"💰 Salary: {opportunity.get('salary') or 'Not specified'}\n\n"
+        f"🔗 {opportunity['url']}"
+    )
+
+
 def main():
+    print("🐛 Buggy Agent starting...")
+
     github_opportunities = search_github_opportunities()
-job_opportunities = search_job_opportunities()
+    job_opportunities = search_job_opportunities()
 
-opportunities = github_opportunities + job_opportunities
+    print(
+        f"🔎 Found {len(github_opportunities)} GitHub opportunities "
+        f"and {len(job_opportunities)} job opportunities"
+    )
 
-    print(f"🔎 Found {len(opportunities)} potential opportunities")
-
-    if not opportunities:
-        print("😴 No opportunities found.")
-        return
-
-    for opportunity in opportunities:
+    for opportunity in github_opportunities:
         print()
         print(f"🐛 {opportunity['title']}")
         print(f"🔗 {opportunity['html_url']}")
 
-        message = format_opportunity(opportunity)
+        send_telegram(format_github_opportunity(opportunity))
 
-        send_telegram(message)
+        print("📨 GitHub opportunity sent to Telegram")
 
-        print("📨 Sent to Telegram")
+    for opportunity in job_opportunities:
+        print()
+        print(f"💼 {opportunity['title']}")
+        print(f"🔗 {opportunity['url']}")
+
+        send_telegram(format_job_opportunity(opportunity))
+
+        print("📨 Job opportunity sent to Telegram")
 
 
 if __name__ == "__main__":
