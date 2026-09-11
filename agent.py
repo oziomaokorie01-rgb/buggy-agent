@@ -32,26 +32,105 @@ def send_telegram(message):
     response.raise_for_status()
 
 
-def format_github_opportunity(opportunity):
-    return (
-        f"🐛 NEW OPPORTUNITY\n\n"
-        f"🎯 {opportunity['title']}\n\n"
-        f"📦 Source: GitHub\n"
-        f"💰 Reward: {opportunity.get('reward', 'Not specified')}\n"
-        f"⭐ Score: {opportunity.get('score', 0)}\n\n"
-        f"🔗 {opportunity['html_url']}"
+def format_opportunity(opportunity):
+    ai = opportunity.get("ai_analysis", {})
+
+    title = opportunity.get(
+        "title",
+        "Untitled opportunity"
     )
 
+    opportunity_type = ai.get(
+        "opportunity_type",
+        opportunity.get(
+            "opportunity_type",
+            "Opportunity"
+        )
+    )
 
-def format_job_opportunity(opportunity):
+    what_you_do = ai.get(
+        "what_you_do",
+        opportunity.get(
+            "description",
+            "No description available."
+        )
+    )
+
+    pay = ai.get(
+        "pay",
+        opportunity.get("reward")
+        or opportunity.get("salary")
+        or "Not specified"
+    )
+
+    deadline = ai.get(
+        "deadline",
+        opportunity.get("deadline")
+        or "None listed"
+    )
+
+    cv_required = (
+        "Yes"
+        if ai.get("cv_required")
+        else "No"
+    )
+
+    application_method = ai.get(
+        "application_method",
+        "Unknown"
+    )
+
+    eligibility = ai.get(
+        "location_eligibility",
+        "Not specified"
+    )
+
+    match_score = ai.get(
+        "match_score",
+        opportunity.get("match_score", 0)
+    )
+
+    buggy_take = ai.get(
+        "buggy_take",
+        "Worth taking a closer look."
+    )
+
+    time_to_money = ai.get(
+        "time_to_money",
+        "unknown"
+    )
+
+    if time_to_money == "fast":
+        speed = "⚡ QUICK MONEY"
+    elif time_to_money == "medium":
+        speed = "🕐 MEDIUM TIMELINE"
+    elif time_to_money == "slow":
+        speed = "🐢 SLOW BURN"
+    else:
+        speed = "👀 WORTH A LOOK"
+
+    url = (
+        opportunity.get("html_url")
+        or opportunity.get("url")
+        or ""
+    )
+
     return (
-        f"🐛 NEW JOB OPPORTUNITY\n\n"
-        f"🎯 {opportunity['title']}\n\n"
-        f"🏢 Company: {opportunity.get('company', 'Unknown')}\n"
-        f"📦 Source: {opportunity.get('source', 'Unknown')}\n"
-        f"💰 Salary: {opportunity.get('salary') or 'Not specified'}\n"
-        f"⭐ Score: {opportunity.get('score', 0)}\n\n"
-        f"🔗 {opportunity['url']}"
+        f"🐛 BUGGY FOUND SOMETHING\n\n"
+        f"🎯 {title}\n\n"
+        f"📦 Type: {opportunity_type}\n"
+        f"💰 Pay: {pay}\n"
+        f"📄 CV: {cv_required}\n"
+        f"📝 Application: {application_method}\n"
+        f"⏰ Deadline: {deadline}\n"
+        f"🌍 Eligibility: {eligibility}\n\n"
+        f"🛠️ What you'll do:\n"
+        f"{what_you_do[:400]}\n\n"
+        f"🧠 Buggy's take:\n"
+        f"{buggy_take}\n\n"
+        f"🎯 Match: {match_score}%\n"
+        f"{speed}\n\n"
+        f"🔗 {url}"
     )
 
 
@@ -61,11 +140,16 @@ def main():
     github_opportunities = search_github_opportunities()
     job_opportunities = search_job_opportunities()
 
-    all_opportunities = github_opportunities + job_opportunities
+    all_opportunities = (
+        github_opportunities
+        + job_opportunities
+    )
 
     print(
-        f"🔎 Found {len(github_opportunities)} GitHub opportunities "
-        f"and {len(job_opportunities)} job opportunities"
+        f"🔎 Found "
+        f"{len(github_opportunities)} GitHub opportunities "
+        f"and "
+        f"{len(job_opportunities)} job opportunities"
     )
 
     worthwhile = filter_opportunities(
@@ -103,13 +187,19 @@ def main():
                 {}
             )
 
-            if ai_analysis.get("worth_pursuing", False):
-                analyzed_opportunities.append(opportunity)
+            if ai_analysis.get(
+                "worth_pursuing",
+                False
+            ):
+                analyzed_opportunities.append(
+                    opportunity
+                )
 
         except Exception as error:
             print(
                 f"⚠️ Gemini analysis failed for "
-                f"{opportunity.get('title', 'Unknown')}: {error}"
+                f"{opportunity.get('title', 'Unknown')}: "
+                f"{error}"
             )
 
     worthwhile = analyzed_opportunities
@@ -121,17 +211,22 @@ def main():
 
     selected = worthwhile[:MAX_ALERTS_PER_RUN]
 
-    print(f"📨 Sending {len(selected)} alerts to Telegram")
+    print(
+        f"📨 Sending "
+        f"{len(selected)} alerts to Telegram"
+    )
 
     for opportunity in selected:
-        if opportunity.get("source") == "GitHub":
-            message = format_github_opportunity(opportunity)
-        else:
-            message = format_job_opportunity(opportunity)
+        message = format_opportunity(
+            opportunity
+        )
 
         send_telegram(message)
 
-        print(f"✅ Sent: {opportunity['title']}")
+        print(
+            f"✅ Sent: "
+            f"{opportunity['title']}"
+        )
 
     print("🐛 Buggy Agent finished.")
 
