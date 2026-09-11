@@ -78,33 +78,44 @@ def main():
         for opportunity in worthwhile
     ]
 
-   analyzed_opportunities = []
-
-for opportunity in worthwhile:
-    try:
-        opportunity = analyze_with_gemini(
-            opportunity,
-            PROFILE
-        )
-
-        ai_analysis = opportunity.get(
-            "ai_analysis",
-            {}
-        )
-
-        if ai_analysis.get("worth_pursuing", False):
-            analyzed_opportunities.append(opportunity)
-
-    except Exception as error:
-        print(
-            f"⚠️ Gemini analysis failed for "
-            f"{opportunity.get('title', 'Unknown')}: {error}"
-        )
-
-worthwhile = analyzed_opportunities
+    worthwhile = [
+        opportunity
+        for opportunity in worthwhile
+        if opportunity["analysis"]["worth_pursuing"]
+    ]
 
     print(
-        f"🧠 After filtering: "
+        f"🧠 After first-pass filtering: "
+        f"{len(worthwhile)} worthwhile opportunities"
+    )
+
+    analyzed_opportunities = []
+
+    for opportunity in worthwhile:
+        try:
+            opportunity = analyze_with_gemini(
+                opportunity,
+                PROFILE
+            )
+
+            ai_analysis = opportunity.get(
+                "ai_analysis",
+                {}
+            )
+
+            if ai_analysis.get("worth_pursuing", False):
+                analyzed_opportunities.append(opportunity)
+
+        except Exception as error:
+            print(
+                f"⚠️ Gemini analysis failed for "
+                f"{opportunity.get('title', 'Unknown')}: {error}"
+            )
+
+    worthwhile = analyzed_opportunities
+
+    print(
+        f"🤖 After Gemini analysis: "
         f"{len(worthwhile)} worthwhile opportunities"
     )
 
