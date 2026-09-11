@@ -1,22 +1,21 @@
+```python
 import os
-import json
 import requests
 
 from scanner import search_github_opportunities
 from job_scanner import search_job_opportunities
 from filter import filter_opportunities
+from profile_loader import load_profile
+
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 MAX_ALERTS_PER_RUN = 10
 
-def load_profile():
-    with open("profile.json", "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
 PROFILE = load_profile()
+
+
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
@@ -69,13 +68,21 @@ def main():
         f"and {len(job_opportunities)} job opportunities"
     )
 
-    filtered = filter_opportunities(all_opportunities)
+    worthwhile = filter_opportunities(
+        all_opportunities,
+        PROFILE
+    )
 
-    print(f"🧠 After filtering: {len(filtered)} worthwhile opportunities")
+    print(
+        f"🧠 After filtering: "
+        f"{len(worthwhile)} worthwhile opportunities"
+    )
 
-    selected = filtered[:MAX_ALERTS_PER_RUN]
+    selected = worthwhile[:MAX_ALERTS_PER_RUN]
 
-    print(f"📨 Sending {len(selected)} alerts to Telegram")
+    print(
+        f"📨 Sending {len(selected)} alerts to Telegram"
+    )
 
     for opportunity in selected:
         if opportunity.get("source") == "GitHub":
@@ -85,10 +92,13 @@ def main():
 
         send_telegram(message)
 
-        print(f"✅ Sent: {opportunity['title']}")
+        print(
+            f"✅ Sent: {opportunity['title']}"
+        )
 
     print("🐛 Buggy Agent finished.")
 
 
 if __name__ == "__main__":
     main()
+```
