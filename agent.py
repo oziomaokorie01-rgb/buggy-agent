@@ -6,6 +6,7 @@ from scanner import search_github_opportunities
 from job_scanner import search_job_opportunities
 from filter import filter_opportunities
 from profile_loader import load_profile
+from analyzer import analyze_opportunity
 
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -72,7 +73,16 @@ def main():
         all_opportunities,
         PROFILE
     )
+worthwhile = [
+    analyze_opportunity(opportunity)
+    for opportunity in worthwhile
+]
 
+worthwhile = [
+    opportunity
+    for opportunity in worthwhile
+    if opportunity["analysis"]["worth_pursuing"]
+]
     print(
         f"🧠 After filtering: "
         f"{len(worthwhile)} worthwhile opportunities"
