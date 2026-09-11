@@ -1,35 +1,58 @@
 import os
 import requests
+
 from scanner import search_github_opportunities
 
-print("BOT TOKEN EXISTS:", bool(os.getenv("TELEGRAM_BOT_TOKEN")))
-print("CHAT ID EXISTS:", bool(os.getenv("TELEGRAM_CHAT_ID")))
 
-opportunities = search_github_opportunities()
-
-print(f"🔎 Found {len(opportunities)} potential opportunities")
-
-for opportunity in opportunities:
-    print()
-    print(f"🐛 {opportunity['title']}")
-    print(f"🔗 {opportunity['html_url']}")
-    
-# FIX: Changed square brackets to parentheses ()
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-message = "🐛 Buggy Agent is alive!\n\nGitHub Actions → Telegram is working! ⚡"
 
-url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+def send_telegram(message):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-response = requests.post(
-    url,
-    json={
-        "chat_id": CHAT_ID,
-        "text": message
-    }
-)
+    response = requests.post(
+        url,
+        json={
+            "chat_id": CHAT_ID,
+            "text": message,
+            "disable_web_page_preview": False,
+        },
+    )
 
-response.raise_for_status()
+    response.raise_for_status()
 
-print("🐛 Buggy Agent successfully sent a Telegram message!")
+
+def format_opportunity(opportunity):
+    return (
+        f"🐛 NEW OPPORTUNITY\n\n"
+        f"🎯 {opportunity['title']}\n\n"
+        f"📦 Source: {opportunity.get('source', 'Unknown')}\n"
+        f"💰 Reward: {opportunity.get('reward', 'Not specified')}\n\n"
+        f"🔗 {opportunity['html_url']}"
+    )
+
+
+def main():
+    opportunities = search_github_opportunities()
+
+    print(f"🔎 Found {len(opportunities)} potential opportunities")
+
+    if not opportunities:
+        print("😴 No opportunities found.")
+        return
+
+    for opportunity in opportunities:
+        print()
+        print(f"🐛 {opportunity['title']}")
+        print(f"🔗 {opportunity['html_url']}")
+
+        message = format_opportunity(opportunity)
+
+        send_telegram(message)
+
+        print("📨 Sent to Telegram")
+
+
+if __name__ == "__main__":
+    main()
