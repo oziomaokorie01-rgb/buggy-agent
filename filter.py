@@ -1,105 +1,92 @@
-QUICK_WORK_KEYWORDS = [
-    "writing",
-    "writer",
-    "ghostwriter",
-    "copywriter",
-    "content",
-    "blog",
-    "social media",
-    "ai",
-    "ai trainer",
-    "ai training",
-    "prompt",
-    "research",
-    "virtual assistant",
-    "assistant",
-    "transcription",
-    "caption",
-]
+def filter_opportunities(opportunities, profile):
+    filtered = []
 
-HIGH_VALUE_KEYWORDS = [
-    "paid",
-    "bounty",
-    "reward",
-    "$",
-    "usd",
-    "freelance",
-    "contract",
-    "quick",
-]
-
-# EXTREMELY STRICT: Blocks jobs requiring deep technical degrees, certifications, or advanced engineering
-BAD_KEYWORDS = [
-    "senior",
-    "lead",
-    "director",
-    "manager",
-    "principal",
-    "architect",
-    "data analyst",
-    "data scientist",
-    "engineer",
-    "developer",
-    "fullstack",
-    "backend",
-    "frontend",
-    "security audit",
-    "penetration",
-    "vulnerability",
-    "authentication bypass",
-    "rust",
-    "golang",
-    "smart contract audit",
-]
-
-
-def score_opportunity(opportunity):
-    text = (
-        str(opportunity.get("title", ""))
-        + " "
-        + str(opportunity.get("description", ""))
-        + " "
-        + str(opportunity.get("tags", ""))
-    ).lower()
-
-    score = 0
-
-    # Heavy penalties for out-of-scope roles
-    for keyword in BAD_KEYWORDS:
-        if keyword in text:
-            score -= 10  # Massive penalty to bury them instantly
-
-    for keyword in QUICK_WORK_KEYWORDS:
-        if keyword in text:
-            score += 3
-
-    for keyword in HIGH_VALUE_KEYWORDS:
-        if keyword in text:
-            score += 2
-
-    if opportunity.get("reward"):
-        score += 3
-
-    if opportunity.get("salary"):
-        score += 3
-
-    return score
-
-
-def filter_opportunities(opportunities, minimum_score=4):
-    scored = []
+    interests = set(profile.get("interests", []))
+    opportunity_types = set(profile.get("opportunity_types", []))
+    avoid = set(profile.get("avoid", []))
 
     for opportunity in opportunities:
-        score = score_opportunity(opportunity)
+        text = " ".join(
+            str(opportunity.get(key, ""))
+            for key in ["title", "description", "url"]
+        ).lower()
 
-        # Only accept items that pass the threshold and weren't heavily penalized
-        if score >= minimum_score:
-            opportunity["score"] = score
-            scored.append(opportunity)
+        score = 0
+        reasons = []
 
-    scored.sort(
-        key=lambda opportunity: opportunity["score"],
-        reverse=True,
-    )
+        # Interest matching
+        interest_keywords = {
+            "development": ["developer", "software", "code", "github", "programming"],
+            "ai": ["ai", "artificial intelligence", "machine learning", "llm", "prompt"],
+            "security": ["security", "bug bounty", "vulnerability", "pentest"],
+            "writing": ["writer", "writing", "content", "copywriter", "documentation"],
+            "design": ["design", "ui", "ux", "figma"],
+            "research": ["research", "analysis", "analyst"]
+        }
 
-    return scored
+        for interest in interests:
+            for keyword in interest_keywords.get(interest, []):
+                if keyword in text:
+                    score += 2
+                    reasons.append(f"matches {interest}")
+                    break
+
+        # Opportunity type matching
+        type_keywords = {
+            "bounty": ["bounty", "reward", "bug bounty"],
+            "quick_gig": ["freelance", "short-term", "one-off", "fixed price"],
+            "hackathon": ["hackathon", "competition", "challenge"],
+            "grant": ["grant", "funding", "fellowship"],
+            "short_contract": ["contract", "temporary", "short-term"],
+            "remote_job": ["remote", "full-time", "part-time"]
+        }
+
+        for opportunity_type in opportunity_types:
+            for keyword in type_keywords.get(opportunity_type, []):
+                if keyword in text:
+                    score += 2
+                    reasons.append(f"matches {opportunity_type}")
+                    break
+
+        # Things the user explicitly wants to avoid
+        avoid_keywords = {
+            "senior_role": ["senior", "lead", "principal", "director", "manager"],
+            "certification_required": [
+                "license required",
+                "certification required",
+                "licensed",
+                "professional certification"
+            ],
+            "long_contract": [
+                "12 month",
+                "12-month",
+                "long term",
+                "long-term contract"
+            ],
+            "unpaid": [
+                "unpaid",
+                "volunteer",
+                "no compensation"
+            ]
+        }
+
+        rejected = False
+
+        for avoidance in avoid:
+            for keyword in avoid_keywords.get(avoidance, []):
+                if keyword in text:
+                    rejected = True
+                    break
+
+            if rejected:
+                break
+
+        if rejected:
+            continue
+
+        if score >= 2:
+            opportunity["match_score"] = min(score * 10, 100)
+            opportunity["match_reasons"] = list(dict.fromkeys(reasons))
+            filtered.append(opportunity)
+
+    return filtered
