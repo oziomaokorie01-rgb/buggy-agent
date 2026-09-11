@@ -14,8 +14,9 @@ for opportunity in opportunities:
     print(f"🐛 {opportunity['title']}")
     print(f"🔗 {opportunity['html_url']}")
     
-BOT_TOKEN = os.getenv["TELEGRAM_BOT_TOKEN"]
-CHAT_ID = os.getenv["TELEGRAM_CHAT_ID"]
+# FIX: Changed square brackets to parentheses ()
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 message = "🐛 Buggy Agent is alive!\n\nGitHub Actions → Telegram is working! ⚡"
 
