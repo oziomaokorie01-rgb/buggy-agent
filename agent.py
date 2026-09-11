@@ -1,17 +1,22 @@
 import os
+import json
 import requests
 
 from scanner import search_github_opportunities
 from job_scanner import search_job_opportunities
 from filter import filter_opportunities
 
-
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 MAX_ALERTS_PER_RUN = 10
 
+def load_profile():
+    with open("profile.json", "r", encoding="utf-8") as f:
+        return json.load(f)
 
+
+PROFILE = load_profile()
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
