@@ -6,6 +6,7 @@ from job_scanner import search_job_opportunities
 from filter import filter_opportunities
 from profile_loader import load_profile
 from analyzer import analyze_opportunity
+from gemini_analyzer import analyze_with_gemini
 
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -77,11 +78,30 @@ def main():
         for opportunity in worthwhile
     ]
 
-    worthwhile = [
-        opportunity
-        for opportunity in worthwhile
-        if opportunity["analysis"]["worth_pursuing"]
-    ]
+   analyzed_opportunities = []
+
+for opportunity in worthwhile:
+    try:
+        opportunity = analyze_with_gemini(
+            opportunity,
+            PROFILE
+        )
+
+        ai_analysis = opportunity.get(
+            "ai_analysis",
+            {}
+        )
+
+        if ai_analysis.get("worth_pursuing", False):
+            analyzed_opportunities.append(opportunity)
+
+    except Exception as error:
+        print(
+            f"⚠️ Gemini analysis failed for "
+            f"{opportunity.get('title', 'Unknown')}: {error}"
+        )
+
+worthwhile = analyzed_opportunities
 
     print(
         f"🧠 After filtering: "
