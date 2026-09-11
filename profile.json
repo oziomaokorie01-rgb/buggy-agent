@@ -1,0 +1,22 @@
+{
+  "interests": [
+    "development",
+    "ai",
+    "security",
+    "writing"
+  ],
+  "opportunity_types": [
+    "bounty",
+    "quick_gig",
+    "hackathon",
+    "grant",
+    "short_contract"
+  ],
+  "avoid": [
+    "certification_required",
+    "senior_role",
+    "long_contract",
+    "unpaid"
+  ],
+  "priority": "money_soon"
+}
