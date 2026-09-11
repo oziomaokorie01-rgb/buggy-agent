@@ -1,4 +1,3 @@
-```python
 def analyze_opportunity(opportunity):
     """
     Performs a first-pass analysis of an opportunity.
@@ -135,4 +134,3 @@ def analyze_opportunity(opportunity):
     opportunity["analysis"] = analysis
 
     return opportunity
-```
