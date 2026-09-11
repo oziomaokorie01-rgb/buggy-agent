@@ -1,3 +1,4 @@
+```python
 import os
 import requests
 
@@ -10,7 +11,6 @@ from analyzer import analyze_opportunity
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
 MAX_ALERTS_PER_RUN = 10
 
 PROFILE = load_profile()
@@ -72,16 +72,18 @@ def main():
         all_opportunities,
         PROFILE
     )
-worthwhile = [
-    analyze_opportunity(opportunity)
-    for opportunity in worthwhile
-]
 
-worthwhile = [
-    opportunity
-    for opportunity in worthwhile
-    if opportunity["analysis"]["worth_pursuing"]
-]
+    worthwhile = [
+        analyze_opportunity(opportunity)
+        for opportunity in worthwhile
+    ]
+
+    worthwhile = [
+        opportunity
+        for opportunity in worthwhile
+        if opportunity["analysis"]["worth_pursuing"]
+    ]
+
     print(
         f"🧠 After filtering: "
         f"{len(worthwhile)} worthwhile opportunities"
@@ -89,9 +91,7 @@ worthwhile = [
 
     selected = worthwhile[:MAX_ALERTS_PER_RUN]
 
-    print(
-        f"📨 Sending {len(selected)} alerts to Telegram"
-    )
+    print(f"📨 Sending {len(selected)} alerts to Telegram")
 
     for opportunity in selected:
         if opportunity.get("source") == "GitHub":
@@ -101,9 +101,7 @@ worthwhile = [
 
         send_telegram(message)
 
-        print(
-            f"✅ Sent: {opportunity['title']}"
-        )
+        print(f"✅ Sent: {opportunity['title']}")
 
     print("🐛 Buggy Agent finished.")
 
