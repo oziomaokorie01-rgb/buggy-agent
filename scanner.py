@@ -4,27 +4,54 @@ import requests
 def search_github_opportunities():
     url = "https://api.github.com/search/issues"
 
-    params = {
-        "q": "bounty is:open",
-        "sort": "updated",
-        "order": "desc",
-        "per_page": 10,
-    }
+    queries = [
+        "bounty is:open",
+        "reward is:open",
+        '"$" bounty is:open',
+        "paid is:open",
+    ]
 
-    response = requests.get(url, params=params)
-    response.raise_for_status()
+    opportunities = []
+    seen = set()
 
-    data = response.json()
+    for query in queries:
+        params = {
+            "q": query,
+            "sort": "updated",
+            "order": "desc",
+            "per_page": 10,
+        }
 
-    return data.get("items", [])
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+
+        data = response.json()
+
+        for item in data.get("items", []):
+            opportunity_id = item["html_url"]
+
+            if opportunity_id in seen:
+                continue
+
+            seen.add(opportunity_id)
+
+            opportunities.append({
+                "id": opportunity_id,
+                "title": item["title"],
+                "html_url": item["html_url"],
+                "source": "GitHub",
+                "reward": extract_reward(item["title"]),
+            })
+
+    return opportunities
 
 
-if __name__ == "__main__":
-    opportunities = search_github_opportunities()
+def extract_reward(title):
+    import re
 
-    print(f"🔎 Found {len(opportunities)} potential opportunities")
+    match = re.search(r"\$\s?[\d,]+(?:\.\d+)?", title)
 
-    for opportunity in opportunities:
-        print()
-        print(f"🐛 {opportunity['title']}")
-        print(f"🔗 {opportunity['html_url']}")
+    if match:
+        return match.group(0)
+
+    return "Not specified"
