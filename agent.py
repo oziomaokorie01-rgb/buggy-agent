@@ -2,7 +2,7 @@ import os
 import requests
 
 from scanner import search_github_opportunities
-
+from job_scanner import search_job_opportunities
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -34,7 +34,10 @@ def format_opportunity(opportunity):
 
 
 def main():
-    opportunities = search_github_opportunities()
+    github_opportunities = search_github_opportunities()
+job_opportunities = search_job_opportunities()
+
+opportunities = github_opportunities + job_opportunities
 
     print(f"🔎 Found {len(opportunities)} potential opportunities")
 
