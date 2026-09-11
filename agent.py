@@ -3,10 +3,13 @@ import requests
 
 from scanner import search_github_opportunities
 from job_scanner import search_job_opportunities
+from filter import filter_opportunities
 
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+MAX_ALERTS_PER_RUN = 10
 
 
 def send_telegram(message):
@@ -27,10 +30,11 @@ def send_telegram(message):
 
 def format_github_opportunity(opportunity):
     return (
-        f"🐛 NEW GITHUB OPPORTUNITY\n\n"
+        f"🐛 NEW OPPORTUNITY\n\n"
         f"🎯 {opportunity['title']}\n\n"
         f"📦 Source: GitHub\n"
-        f"💰 Reward: {opportunity.get('reward', 'Not specified')}\n\n"
+        f"💰 Reward: {opportunity.get('reward', 'Not specified')}\n"
+        f"⭐ Score: {opportunity.get('score', 0)}\n\n"
         f"🔗 {opportunity['html_url']}"
     )
 
@@ -41,7 +45,8 @@ def format_job_opportunity(opportunity):
         f"🎯 {opportunity['title']}\n\n"
         f"🏢 Company: {opportunity.get('company', 'Unknown')}\n"
         f"📦 Source: {opportunity.get('source', 'Unknown')}\n"
-        f"💰 Salary: {opportunity.get('salary') or 'Not specified'}\n\n"
+        f"💰 Salary: {opportunity.get('salary') or 'Not specified'}\n"
+        f"⭐ Score: {opportunity.get('score', 0)}\n\n"
         f"🔗 {opportunity['url']}"
     )
 
@@ -52,28 +57,32 @@ def main():
     github_opportunities = search_github_opportunities()
     job_opportunities = search_job_opportunities()
 
+    all_opportunities = github_opportunities + job_opportunities
+
     print(
         f"🔎 Found {len(github_opportunities)} GitHub opportunities "
         f"and {len(job_opportunities)} job opportunities"
     )
 
-    for opportunity in github_opportunities:
-        print()
-        print(f"🐛 {opportunity['title']}")
-        print(f"🔗 {opportunity['html_url']}")
+    filtered = filter_opportunities(all_opportunities)
 
-        send_telegram(format_github_opportunity(opportunity))
+    print(f"🧠 After filtering: {len(filtered)} worthwhile opportunities")
 
-        print("📨 GitHub opportunity sent to Telegram")
+    selected = filtered[:MAX_ALERTS_PER_RUN]
 
-    for opportunity in job_opportunities:
-        print()
-        print(f"💼 {opportunity['title']}")
-        print(f"🔗 {opportunity['url']}")
+    print(f"📨 Sending {len(selected)} alerts to Telegram")
 
-        send_telegram(format_job_opportunity(opportunity))
+    for opportunity in selected:
+        if opportunity.get("source") == "GitHub":
+            message = format_github_opportunity(opportunity)
+        else:
+            message = format_job_opportunity(opportunity)
 
-        print("📨 Job opportunity sent to Telegram")
+        send_telegram(message)
+
+        print(f"✅ Sent: {opportunity['title']}")
+
+    print("🐛 Buggy Agent finished.")
 
 
 if __name__ == "__main__":
