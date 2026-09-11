@@ -2,6 +2,8 @@ import os
 import requests
 from scanner import search_github_opportunities
 
+print("BOT TOKEN EXISTS:", bool(os.getenv("TELEGRAM_BOT_TOKEN")))
+print("CHAT ID EXISTS:", bool(os.getenv("TELEGRAM_CHAT_ID")))
 
 opportunities = search_github_opportunities()
 
