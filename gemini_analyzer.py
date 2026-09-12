@@ -95,9 +95,9 @@ Buggy thinks the opportunity is or is not worth the user's attention.
     )
 
     if not response.ok:
-    print("❌ OpenRouter error:")
-    print(response.text)
-    response.raise_for_status()
+        print("❌ OpenRouter error:")
+        print(response.text)
+        response.raise_for_status()
     data = response.json()
     text = data["choices"][0]["message"]["content"]
 
@@ -113,7 +113,7 @@ Buggy thinks the opportunity is or is not worth the user's attention.
 
     analysis = json.loads(text)
     print("🧠 AI ANALYSIS:")
-print(json.dumps(analysis, indent=2))
+    print(json.dumps(analysis, indent=2))
 
     opportunity["ai_analysis"] = analysis
 
