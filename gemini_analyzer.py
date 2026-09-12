@@ -131,7 +131,7 @@ Buggy thinks the opportunity is or is not worth the user's attention.
 Do not exaggerate the opportunity.
 """
 
-    response = requests.post(
+   response = requests.post(
         OPENROUTER_URL,
         headers={
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -140,11 +140,12 @@ Do not exaggerate the opportunity.
             "X-Title": "Buggy Agent"
         },
         json={
-            "model": "openrouter/auto",
+            "model": "nvidia/nemotron-3-ultra-550b-a55b:free",  # <-- Change model string here
             "messages": [{"role": "user", "content": prompt}],
             "response_format": {"type": "json_object"}
         },
         timeout=60,
+    
     )
 
     response.raise_for_status()
