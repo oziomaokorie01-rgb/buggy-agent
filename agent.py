@@ -7,7 +7,24 @@ from filter import filter_opportunities
 from profile_loader import load_profile
 from analyzer import analyze_opportunity
 from gemini_analyzer import analyze_with_gemini
+import time
+from requests.exceptions import HTTPError
 
+def analyze_with_retry(opportunity, profile):
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            return analyze_with_gemini(opportunity, profile)
+        except HTTPError as e:
+            if e.response.status_code in [429, 503]:
+                wait_time = (2 ** attempt) * 2  # Exponential backoff: 2s, 4s, 8s
+                print(f"⚠️ Rate limited or server busy. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+            else:
+                raise
+    print(f"❌ Failed to analyze: {opportunity.get('title')}")
+    return opportunity
+    
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -177,7 +194,8 @@ def main():
 
     for opportunity in worthwhile:
         try:
-            opportunity = analyze_with_gemini(
+            # Replaced direct call with retry mechanism
+            opportunity = analyze_with_retry(
                 opportunity,
                 PROFILE
             )
@@ -194,6 +212,9 @@ def main():
                 analyzed_opportunities.append(
                     opportunity
                 )
+
+            # Throttle to prevent hitting rate limits (429/503)
+            time.sleep(1.5)
 
         except Exception as error:
             print(
