@@ -140,7 +140,7 @@ Do not exaggerate the opportunity.
             "X-Title": "Buggy Agent"
         },
         json={
-            "model": "meta-llama/llama-3-8b-instruct:free",
+            "model": "openrouter/auto",
             "messages": [{"role": "user", "content": prompt}],
             "response_format": {"type": "json_object"}
         },
