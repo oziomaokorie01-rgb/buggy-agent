@@ -2,16 +2,12 @@ import os
 import json
 import requests
 
-
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-
 def analyze_with_gemini(opportunity, profile):
     if not OPENROUTER_API_KEY:
-        raise RuntimeError(
-            "OPENROUTER_API_KEY is not set"
-        )
+        raise RuntimeError("OPENROUTER_API_KEY is not set")
 
     prompt = f"""
 You are Buggy, a personal opportunity scout.
@@ -131,7 +127,7 @@ Buggy thinks the opportunity is or is not worth the user's attention.
 Do not exaggerate the opportunity.
 """
 
-   response = requests.post(
+    response = requests.post(
         OPENROUTER_URL,
         headers={
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -140,12 +136,11 @@ Do not exaggerate the opportunity.
             "X-Title": "Buggy Agent"
         },
         json={
-            "model": "nvidia/nemotron-3-ultra-550b-a55b:free",  # <-- Change model string here
+            "model": "openrouter/auto",
             "messages": [{"role": "user", "content": prompt}],
             "response_format": {"type": "json_object"}
         },
         timeout=60,
-    
     )
 
     response.raise_for_status()
