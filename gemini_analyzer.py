@@ -3,18 +3,14 @@ import json
 import requests
 
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-GEMINI_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-3.5-flash:generateContent"
-)
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
 def analyze_with_gemini(opportunity, profile):
-    if not GEMINI_API_KEY:
+    if not OPENROUTER_API_KEY:
         raise RuntimeError(
-            "GEMINI_API_KEY is not set"
+            "OPENROUTER_API_KEY is not set"
         )
 
     prompt = f"""
@@ -135,23 +131,18 @@ Buggy thinks the opportunity is or is not worth the user's attention.
 Do not exaggerate the opportunity.
 """
 
-
     response = requests.post(
-        GEMINI_URL,
+        OPENROUTER_URL,
         headers={
-            "x-goog-api-key": GEMINI_API_KEY,
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/buggy-agent",
+            "X-Title": "Buggy Agent"
         },
         json={
-            "contents": [
-                {
-                    "parts": [
-                        {
-                            "text": prompt
-                        }
-                    ]
-                }
-            ]
+            "model": "meta-llama/llama-3-8b-instruct:free",
+            "messages": [{"role": "user", "content": prompt}],
+            "response_format": {"type": "json_object"}
         },
         timeout=60,
     )
@@ -159,11 +150,7 @@ Do not exaggerate the opportunity.
     response.raise_for_status()
 
     data = response.json()
-
-    text = (
-        data["candidates"][0]
-        ["content"]["parts"][0]["text"]
-    )
+    text = data["choices"][0]["message"]["content"]
 
     text = text.strip()
 
