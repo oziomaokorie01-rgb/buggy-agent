@@ -12,9 +12,7 @@ def analyze_with_gemini(opportunity, profile):
     prompt = f"""
 You are Buggy, a personal opportunity scout.
 
-Your job is NOT to blindly recommend opportunities.
-
-You must determine whether this opportunity is realistically
+Your job is to determine whether this opportunity is realistically
 worth the user's attention based on their profile.
 
 USER PROFILE:
@@ -30,30 +28,16 @@ Pay particular attention to:
 - what the user actually has to do
 - required skills
 - required experience
-- professional licenses
-- certifications
-- location restrictions
-- citizenship restrictions
-- education requirements
-- application requirements
-- CV/resume requirements
 - whether payment is actually offered
 - exact reward or salary
 - deadline
-- opportunity type
-- whether this is a bounty, hackathon, grant, job, or short gig
+- opportunity type (bounty, hackathon, grant, job, or short gig)
 - how quickly the user could realistically complete it
-- whether the opportunity appears legitimate
-- whether the opportunity is relevant to the user's interests
-- whether the opportunity is realistically accessible to the user
+- whether the opportunity is relevant and accessible
 
-Do NOT assume that an opportunity is suitable simply because it
-contains words matching the user's interests.
+Be practical, not overly restrictive.
 
-Be conservative.
-
-If the opportunity clearly requires something the user cannot
-meet, mark it as ineligible.
+If an opportunity is a reasonable fit for a remote developer, quick gig, or bounty, mark it as worth pursuing (worth_pursuing: true) if the match score is 40 or higher, even if some minor details are unspecified.
 
 Do not invent missing information.
 
@@ -78,53 +62,20 @@ Return ONLY valid JSON in exactly this structure:
 }}
 
 Rules for eligibility_status:
-
-"eligible"
-= no important eligibility barrier was found.
-
-"uncertain"
-= important eligibility information is missing.
-
-"ineligible"
-= the user clearly cannot meet an important requirement.
+"eligible" = no important eligibility barrier was found.
+"uncertain" = important eligibility information is missing.
+"ineligible" = the user clearly cannot meet an important requirement.
 
 Rules for time_to_money:
-
-"fast"
-= could realistically lead to money quickly.
-
-"medium"
-= likely takes some time before payment.
-
-"slow"
-= long application, competition, grant, long contract,
-or otherwise unlikely to produce money quickly.
+"fast" = could realistically lead to money quickly.
+"medium" = likely takes some time before payment.
+"slow" = long application, competition, grant, or long contract.
 
 match_score must be an integer from 0 to 100.
-
 The user's priority is making money soon.
-
-Give extra weight to opportunities that:
-- have real monetary rewards
-- can be completed quickly
-- do not require long hiring processes
-- do not require professional licenses
-- do not require unnecessary certifications
-- are accessible remotely
-- match the user's skills
-
-Give lower scores to:
-- senior positions
-- long hiring processes
-- long-term contracts
-- unpaid opportunities
-- opportunities with unclear compensation
-- opportunities with restrictive eligibility
 
 "buggy_take" should be a short, useful explanation of WHY
 Buggy thinks the opportunity is or is not worth the user's attention.
-
-Do not exaggerate the opportunity.
 """
 
     response = requests.post(
@@ -143,8 +94,10 @@ Do not exaggerate the opportunity.
         timeout=60,
     )
 
+    if not response.ok:
+    print("❌ OpenRouter error:")
+    print(response.text)
     response.raise_for_status()
-
     data = response.json()
     text = data["choices"][0]["message"]["content"]
 
@@ -159,6 +112,8 @@ Do not exaggerate the opportunity.
     text = text.strip()
 
     analysis = json.loads(text)
+    print("🧠 AI ANALYSIS:")
+print(json.dumps(analysis, indent=2))
 
     opportunity["ai_analysis"] = analysis
 
