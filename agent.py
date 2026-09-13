@@ -1,40 +1,84 @@
 import os
+import time
+
 import requests
+from requests.exceptions import HTTPError
 
 from scanner import search_github_opportunities
-from job_scanner import search_job_opportunities
 from filter import filter_opportunities
+from opportunity_agent import evaluate_opportunity
 from profile_loader import load_profile
 from analyzer import analyze_opportunity
 from gemini_analyzer import analyze_with_gemini
-import time
-from requests.exceptions import HTTPError
 
-def analyze_with_retry(opportunity, profile):
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            return analyze_with_gemini(opportunity, profile)
-        except HTTPError as e:
-            if e.response.status_code in [429, 503]:
-                wait_time = (2 ** attempt) * 2  # Exponential backoff: 2s, 4s, 8s
-                print(f"⚠️ Rate limited or server busy. Retrying in {wait_time}s...")
-                time.sleep(wait_time)
-            else:
-                raise
-    print(f"❌ Failed to analyze: {opportunity.get('title')}")
-    return opportunity
-    
+
+# --------------------------------------------------
+# CONFIG
+# --------------------------------------------------
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
 MAX_ALERTS_PER_RUN = 10
 
 PROFILE = load_profile()
 
 
+# --------------------------------------------------
+# GEMINI RETRY
+# --------------------------------------------------
+
+def analyze_with_retry(opportunity, profile):
+    max_retries = 3
+
+    for attempt in range(max_retries):
+        try:
+            return analyze_with_gemini(
+                opportunity,
+                profile
+            )
+
+        except HTTPError as error:
+            if error.response is not None and error.response.status_code in [429, 503]:
+                wait_time = (2 ** attempt) * 2
+
+                print(
+                    f"⚠️ Rate limited or server busy. "
+                    f"Retrying in {wait_time}s..."
+                )
+
+                time.sleep(wait_time)
+
+            else:
+                raise
+
+    print(
+        f"❌ Failed to analyze: "
+        f"{opportunity.get('title', 'Unknown')}"
+    )
+
+    return opportunity
+
+
+# --------------------------------------------------
+# TELEGRAM
+# --------------------------------------------------
+
 def send_telegram(message):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    if not BOT_TOKEN:
+        raise RuntimeError(
+            "TELEGRAM_BOT_TOKEN is not configured."
+        )
+
+    if not CHAT_ID:
+        raise RuntimeError(
+            "TELEGRAM_CHAT_ID is not configured."
+        )
+
+    url = (
+        f"https://api.telegram.org/"
+        f"bot{BOT_TOKEN}/sendMessage"
+    )
 
     response = requests.post(
         url,
@@ -48,6 +92,10 @@ def send_telegram(message):
 
     response.raise_for_status()
 
+
+# --------------------------------------------------
+# TELEGRAM MESSAGE FORMAT
+# --------------------------------------------------
 
 def format_opportunity(opportunity):
     ai = opportunity.get("ai_analysis", {})
@@ -151,28 +199,43 @@ def format_opportunity(opportunity):
     )
 
 
+# --------------------------------------------------
+# MAIN
+# --------------------------------------------------
+
 def main():
     print("🐛 Buggy Agent starting...")
 
-    github_opportunities = search_github_opportunities()
-    job_opportunities = search_job_opportunities()
+    # ----------------------------------------------
+    # 1. COLLECT OPPORTUNITIES
+    # ----------------------------------------------
 
-    all_opportunities = (
-        github_opportunities
-        + job_opportunities
+    github_opportunities = (
+        search_github_opportunities()
     )
+
+    # Remote OK / old job scanner intentionally removed.
+    # We will add the approved sources individually.
+
+    all_opportunities = github_opportunities
 
     print(
         f"🔎 Found "
-        f"{len(github_opportunities)} GitHub opportunities "
-        f"and "
-        f"{len(job_opportunities)} job opportunities"
+        f"{len(github_opportunities)} GitHub opportunities"
     )
+
+    # ----------------------------------------------
+    # 2. FIRST-PASS FILTER
+    # ----------------------------------------------
 
     worthwhile = filter_opportunities(
         all_opportunities,
         PROFILE
     )
+
+    # ----------------------------------------------
+    # 3. RULE-BASED ANALYSIS
+    # ----------------------------------------------
 
     worthwhile = [
         analyze_opportunity(opportunity)
@@ -182,7 +245,10 @@ def main():
     worthwhile = [
         opportunity
         for opportunity in worthwhile
-        if opportunity["analysis"]["worth_pursuing"]
+        if opportunity.get("analysis", {}).get(
+            "worth_pursuing",
+            False
+        )
     ]
 
     print(
@@ -190,11 +256,14 @@ def main():
         f"{len(worthwhile)} worthwhile opportunities"
     )
 
+    # ----------------------------------------------
+    # 4. GEMINI ANALYSIS
+    # ----------------------------------------------
+
     analyzed_opportunities = []
 
     for opportunity in worthwhile:
         try:
-            # Replaced direct call with retry mechanism
             opportunity = analyze_with_retry(
                 opportunity,
                 PROFILE
@@ -213,7 +282,7 @@ def main():
                     opportunity
                 )
 
-            # Throttle to prevent hitting rate limits (429/503)
+            # Prevent excessive Gemini requests.
             time.sleep(1.5)
 
         except Exception as error:
@@ -230,7 +299,51 @@ def main():
         f"{len(worthwhile)} worthwhile opportunities"
     )
 
+    # ----------------------------------------------
+    # 5. LIMIT BEFORE STRANDS
+    # ----------------------------------------------
+
     selected = worthwhile[:MAX_ALERTS_PER_RUN]
+
+    # ----------------------------------------------
+    # 6. STRANDS / BUGGY FINAL DECISION
+    # ----------------------------------------------
+
+    approved = []
+
+    for opportunity in selected:
+        try:
+            decision = evaluate_opportunity(
+                opportunity
+            )
+
+            print()
+            print(
+                f"🧠 Buggy evaluated: "
+                f"{opportunity.get('title', 'Unknown')}"
+            )
+            print(f"   {decision}")
+
+            if str(decision).upper().startswith("KEEP"):
+                approved.append(opportunity)
+
+        except Exception as error:
+            print(
+                f"⚠️ Buggy evaluation failed for "
+                f"{opportunity.get('title', 'Unknown')}: "
+                f"{error}"
+            )
+
+    selected = approved
+
+    print(
+        f"🧠 After Buggy decision: "
+        f"{len(selected)} approved opportunities"
+    )
+
+    # ----------------------------------------------
+    # 7. SEND TELEGRAM ALERTS
+    # ----------------------------------------------
 
     print(
         f"📨 Sending "
@@ -238,19 +351,31 @@ def main():
     )
 
     for opportunity in selected:
-        message = format_opportunity(
-            opportunity
-        )
+        try:
+            message = format_opportunity(
+                opportunity
+            )
 
-        send_telegram(message)
+            send_telegram(message)
 
-        print(
-            f"✅ Sent: "
-            f"{opportunity['title']}"
-        )
+            print(
+                f"✅ Sent: "
+                f"{opportunity.get('title', 'Unknown')}"
+            )
+
+        except Exception as error:
+            print(
+                f"❌ Failed to send Telegram alert for "
+                f"{opportunity.get('title', 'Unknown')}: "
+                f"{error}"
+            )
 
     print("🐛 Buggy Agent finished.")
 
+
+# --------------------------------------------------
+# ENTRY POINT
+# --------------------------------------------------
 
 if __name__ == "__main__":
     main()
