@@ -10,6 +10,7 @@ from opportunity_agent import evaluate_opportunity
 from profile_loader import load_profile
 from analyzer import analyze_opportunity
 from gemini_analyzer import analyze_with_gemini
+from wwr_scanner import search_wwr_opportunities
 
 
 # --------------------------------------------------
@@ -210,19 +211,15 @@ def main():
     # 1. COLLECT OPPORTUNITIES
     # ----------------------------------------------
 
-    github_opportunities = (
-        search_github_opportunities()
-    )
+  github_opportunities = search_github_opportunities()
+wwr_opportunities = search_wwr_opportunities()
 
-    # Remote OK / old job scanner intentionally removed.
-    # We will add the approved sources individually.
+all_opportunities = github_opportunities + wwr_opportunities
 
-    all_opportunities = github_opportunities
-
-    print(
-        f"🔎 Found "
-        f"{len(github_opportunities)} GitHub opportunities"
-    )
+   print(
+    f"🔎 Found {len(github_opportunities)} GitHub opportunities "
+    f"and {len(wwr_opportunities)} We Work Remotely opportunities"
+)
 
     # ----------------------------------------------
     # 2. FIRST-PASS FILTER
