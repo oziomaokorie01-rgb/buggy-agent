@@ -10,6 +10,7 @@ from opportunity_agent import evaluate_opportunity
 from profile_loader import load_profile
 from analyzer import analyze_opportunity
 from gemini_analyzer import analyze_with_gemini
+from hn_scanner import search_hn_opportunities
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -90,15 +91,17 @@ def format_opportunity(opportunity):
 def main():
     print("🐛 Buggy Agent starting...")
     
-    github_opportunities = search_github_opportunities()
-    wwr_opportunities = search_wwr_opportunities()
-    all_opportunities = github_opportunities + wwr_opportunities
+   github_opportunities = search_github_opportunities()
+wwr_opportunities = search_wwr_opportunities()
+hn_opportunities = search_hn_opportunities()
 
-    print(
-        f"🔎 Found {len(github_opportunities)} GitHub opportunities "
-        f"and {len(wwr_opportunities)} We Work Remotely opportunities"
-    )
+all_opportunities = github_opportunities + wwr_opportunities + hn_opportunities
 
+print(
+    f"🔎 Found {len(github_opportunities)} GitHub, "
+    f"{len(wwr_opportunities)} WWR, and "
+    f"{len(hn_opportunities)} Hacker News opportunities"
+)
     worthwhile = filter_opportunities(all_opportunities, PROFILE)
     
     worthwhile = [analyze_opportunity(opportunity) for opportunity in worthwhile]
