@@ -89,15 +89,14 @@ Buggy thinks the opportunity is or is not worth the user's attention.
         json={
             "model": "openrouter/auto",
             "messages": [{"role": "user", "content": prompt}],
-            "response_format": {"type": "json_object"}
+            "response_format": {"type": "json_object"},
+            "max_tokens": 1000  # <--- CRITICAL FIX: Restricts token request size to fit free tier limits
         },
         timeout=60,
     )
 
-    if not response.ok:
-        print("❌ OpenRouter error:")
-        print(response.text)
-        response.raise_for_status()
+    response.raise_for_status()
+
     data = response.json()
     text = data["choices"][0]["message"]["content"]
 
@@ -112,8 +111,6 @@ Buggy thinks the opportunity is or is not worth the user's attention.
     text = text.strip()
 
     analysis = json.loads(text)
-    print("🧠 AI ANALYSIS:")
-    print(json.dumps(analysis, indent=2))
 
     opportunity["ai_analysis"] = analysis
 
