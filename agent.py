@@ -11,6 +11,8 @@ from profile_loader import load_profile
 from analyzer import analyze_opportunity
 from gemini_analyzer import analyze_with_gemini
 from hn_scanner import search_hn_opportunities
+from history import filter_already_sent, mark_as_sent
+from ai_task_scanner import search_ai_task_opportunities
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -91,16 +93,23 @@ def format_opportunity(opportunity):
 def main():
     print("🐛 Buggy Agent starting...")
     
-   github_opportunities = search_github_opportunities()
+  github_opportunities = search_github_opportunities()
 wwr_opportunities = search_wwr_opportunities()
 hn_opportunities = search_hn_opportunities()
+ai_opportunities = search_ai_task_opportunities()
 
-all_opportunities = github_opportunities + wwr_opportunities + hn_opportunities
+all_opportunities = (
+    github_opportunities + 
+    wwr_opportunities + 
+    hn_opportunities + 
+    ai_opportunities
+)
 
 print(
     f"🔎 Found {len(github_opportunities)} GitHub, "
-    f"{len(wwr_opportunities)} WWR, and "
-    f"{len(hn_opportunities)} Hacker News opportunities"
+    f"{len(wwr_opportunities)} WWR, "
+    f"{len(hn_opportunities)} HN, and "
+    f"{len(ai_opportunities)} AI task opportunities"
 )
     worthwhile = filter_opportunities(all_opportunities, PROFILE)
     
@@ -142,6 +151,8 @@ print(
         message = format_opportunity(opportunity)
         send_telegram(message)
         print(f"✅ Sent: {opportunity['title']}")
+        # Record these IDs so they won't trigger alerts again
+mark_as_sent(selected)
 
     print("🐛 Buggy Agent finished.")
 
