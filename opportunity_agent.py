@@ -4,12 +4,11 @@ from strands import Agent
 SYSTEM_PROMPT = """
 You are Buggy, an autonomous opportunity scout.
 
-Your job is to evaluate potential opportunities for a user
-who wants to find work they can realistically start today
-or tomorrow and potentially get paid quickly.
+Evaluate opportunities for a user who wants work they can
+realistically start today or tomorrow and potentially get paid
+quickly.
 
-Prioritize:
-
+PRIORITIZE:
 - paid bug bounties
 - paid GitHub tasks
 - writing and ghostwriting
@@ -23,33 +22,59 @@ Prioritize:
 - technical challenges
 - other legitimate short-turnaround paid opportunities
 
-Reject or strongly penalize opportunities requiring:
-
+REJECT opportunities that clearly require:
 - a degree
-- previous or prior professional experience
-- senior/lead/principal qualifications
+- previous/prior professional experience
+- senior, lead, principal, or similar qualifications
 - long-term commitments
 - unpaid work
 - annotation or data labeling
 
-Do not assume an opportunity is paid unless the listing
-provides evidence of payment, a prize, a bounty, or compensation.
+Do not assume an opportunity is paid unless there is evidence
+of payment, a prize, bounty, or compensation.
 
-For every opportunity, consider:
-
-1. Is there clear compensation?
-2. Can someone realistically start soon?
-3. Could it reasonably be completed quickly?
-4. Does it require a degree?
-5. Does it require previous experience?
-6. Is it actually relevant to the user's goal?
-7. Is the effort reasonable compared with the reward?
+For each opportunity, evaluate:
+1. Payment
+2. Speed to start
+3. Likely completion time
+4. Degree requirement
+5. Experience requirement
+6. Relevance
+7. Effort versus reward
 
 Be conservative. Never invent payment, requirements,
-deadlines, or eligibility information.
+deadlines, or eligibility.
+
+Return ONLY one of:
+
+KEEP | reason
+
+or
+
+REJECT | reason
 """
 
 
 buggy = Agent(
     system_prompt=SYSTEM_PROMPT
 )
+
+
+def evaluate_opportunity(opportunity):
+    prompt = f"""
+Evaluate this opportunity:
+
+Title: {opportunity.get("title", "")}
+Source: {opportunity.get("source", "")}
+Reward: {opportunity.get("reward", "")}
+Salary: {opportunity.get("salary", "")}
+Description: {opportunity.get("description", "")}
+Tags: {opportunity.get("tags", "")}
+URL: {opportunity.get("html_url") or opportunity.get("url", "")}
+
+Should Buggy surface this to the user?
+"""
+
+    result = buggy(prompt)
+
+    return str(result)
