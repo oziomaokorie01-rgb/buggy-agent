@@ -1,92 +1,73 @@
+import re
+
+# Keywords that indicate actual monetization, task-based work, or quick payouts
+PRIORITY_KEYWORDS = [
+    "bounty",
+    "reward",
+    "paid",
+    "$",
+    "usdc",
+    "usdt",
+    "grant",
+    "hackathon",
+    "contract",
+    "freelance",
+    "gig",
+    "part-time",
+    "writing",
+    "writer",
+    "ghostwriter",
+    "copywriter",
+    "content",
+    "prompt",
+    "ai evaluation",
+    "research",
+    "design",
+    "ui/ux",
+]
+
+# Keywords that instantly disqualify an item (noise, maintenance PRs, senior requirements)
+EXCLUDE_KEYWORDS = [
+    "update dependency",
+    "deps",
+    "chore(deps)",
+    "security advisory",
+    "lockfile",
+    "senior engineering manager",
+    "director of",
+    "vp of",
+    "unpaid intern",
+    "volunteer",
+]
+
 def filter_opportunities(opportunities, profile):
     filtered = []
 
-    interests = set(profile.get("interests", []))
-    opportunity_types = set(profile.get("opportunity_types", []))
-    avoid = set(profile.get("avoid", []))
+    for opp in opportunities:
+        title = opp.get("title", "").lower()
+        description = opp.get("description", "").lower()
+        full_text = f"{title} {description}"
 
-    for opportunity in opportunities:
-        text = " ".join(
-            str(opportunity.get(key, ""))
-            for key in ["title", "description", "url"]
-        ).lower()
-
-        score = 0
-        reasons = []
-
-        # Interest matching
-        interest_keywords = {
-            "development": ["developer", "software", "code", "github", "programming"],
-            "ai": ["ai", "artificial intelligence", "machine learning", "llm", "prompt"],
-            "security": ["security", "bug bounty", "vulnerability", "pentest"],
-            "writing": ["writer", "writing", "content", "copywriter", "documentation"],
-            "design": ["design", "ui", "ux", "figma"],
-            "research": ["research", "analysis", "analyst"]
-        }
-
-        for interest in interests:
-            for keyword in interest_keywords.get(interest, []):
-                if keyword in text:
-                    score += 2
-                    reasons.append(f"matches {interest}")
-                    break
-
-        # Opportunity type matching
-        type_keywords = {
-            "bounty": ["bounty", "reward", "bug bounty"],
-            "quick_gig": ["freelance", "short-term", "one-off", "fixed price"],
-            "hackathon": ["hackathon", "competition", "challenge"],
-            "grant": ["grant", "funding", "fellowship"],
-            "short_contract": ["contract", "temporary", "short-term"],
-            "remote_job": ["remote", "full-time", "part-time"]
-        }
-
-        for opportunity_type in opportunity_types:
-            for keyword in type_keywords.get(opportunity_type, []):
-                if keyword in text:
-                    score += 2
-                    reasons.append(f"matches {opportunity_type}")
-                    break
-
-        # Things the user explicitly wants to avoid
-        avoid_keywords = {
-            "senior_role": ["senior", "lead", "principal", "director", "manager"],
-            "certification_required": [
-                "license required",
-                "certification required",
-                "licensed",
-                "professional certification"
-            ],
-            "long_contract": [
-                "12 month",
-                "12-month",
-                "long term",
-                "long-term contract"
-            ],
-            "unpaid": [
-                "unpaid",
-                "volunteer",
-                "no compensation"
-            ]
-        }
-
-        rejected = False
-
-        for avoidance in avoid:
-            for keyword in avoid_keywords.get(avoidance, []):
-                if keyword in text:
-                    rejected = True
-                    break
-
-            if rejected:
-                break
-
-        if rejected:
+        # 1. Check exclusions first
+        if any(exc in full_text for exc in EXCLUDE_KEYWORDS):
             continue
 
-        if score >= 2:
-            opportunity["match_score"] = min(score * 10, 100)
-            opportunity["match_reasons"] = list(dict.fromkeys(reasons))
-            filtered.append(opportunity)
+        # 2. For GitHub issues, heavily favor those containing money markers or explicit bounty labels
+        source = opp.get("source", "")
+        if source == "GitHub":
+            # Check if it has monetary markers or is explicitly a task/bounty
+            has_money = any(token in full_text for token in ["$", "bounty", "reward", "paid", "usdc"])
+            has_task_label = any(lbl in str(opp.get("labels", [])).lower() for lbl in ["bounty", "good first issue", "help wanted", "paid"])
+            
+            if not (has_money or has_task_label):
+                # If it's a generic GitHub issue without financial/task indicators, skip it
+                continue
+
+        # 3. For WWR / HN / general sources, check against priority keywords
+        if source != "GitHub":
+            if not any(kw in full_text for kw in PRIORITY_KEYWORDS):
+                continue
+
+        filtered.append(opp)
 
     return filtered
