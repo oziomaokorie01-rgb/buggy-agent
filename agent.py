@@ -1,158 +1,106 @@
 import os
-import time
+import json
 import requests
-from requests.exceptions import HTTPError
 
-from scanner import search_github_opportunities
-from wwr_scanner import search_wwr_opportunities
-from hn_scanner import search_hn_opportunities
-from ai_task_scanner import search_ai_task_opportunities
-from filter import filter_opportunities
-from opportunity_agent import evaluate_opportunity
-from profile_loader import load_profile
-from analyzer import analyze_opportunity
-from gemini_analyzer import analyze_with_gemini
-from history import filter_already_sent, mark_as_sent
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-PROFILE = load_profile()
+def generate_local_fallback(opportunity, profile):
+    """Generates a structured analysis locally when API credits are exhausted (402)."""
+    title = opportunity.get("title", "")
+    desc = opportunity.get("description", "")
+    combined_text = f"{title} {desc}".lower()
+    
+    # Simple heuristic scoring based on user preferences
+    match_score = 65
+    if any(k in combined_text for k in ["python", "react", "javascript", "ai", "bounty", "remote", "script"]):
+        match_score = 85
+    elif any(k in combined_text for k in ["senior", "manager", "director", "5+ years"]):
+        match_score = 35
 
-def analyze_with_retry(opportunity, profile):
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            return analyze_with_gemini(opportunity, profile)
-        except HTTPError as e:
-            if e.response.status_code in [429, 503]:
-                wait_time = (2 ** attempt) * 2
-                print(f"⚠️ Rate limited or server busy. Retrying in {wait_time}s...")
-                time.sleep(wait_time)
-            else:
-                raise
-    print(f"❌ Failed to analyze: {opportunity.get('title')}")
+    pay_text = opportunity.get("reward") or opportunity.get("salary") or "Not specified in snippet"
+    if "[$" in title or "$" in desc:
+        pay_text = "Mentioned in listing"
+
+    return {
+        "opportunity_type": "bounty/gig" if "bounty" in combined_text or "[$" in title else "remote task",
+        "what_you_do": desc[:350] if desc else title,
+        "pay": pay_text,
+        "deadline": "Not specified",
+        "cv_required": False,
+        "application_method": "Check opportunity link",
+        "experience_required": "Standard remote dev capability",
+        "certification_required": False,
+        "location_eligibility": "Global / Remote",
+        "eligibility_status": "eligible",
+        "risk_flags": ["pay_not_specified"] if pay_text == "Not specified in snippet" else [],
+        "time_to_money": "fast" if match_score > 70 else "medium",
+        "match_score": match_score,
+        "worth_pursuing": match_score >= 50,
+        "buggy_take": f"Local analysis: Matches your skill keywords with a score of {match_score}%. Worth a quick review."
+    }
+
+def analyze_with_gemini(opportunity, profile):
+    if not OPENROUTER_API_KEY:
+        print("⚠️ OPENROUTER_API_KEY not set. Using local fallback.")
+        opportunity["ai_analysis"] = generate_local_fallback(opportunity, profile)
+        return opportunity
+
+    prompt = f"""
+You are Buggy, a personal opportunity scout.
+USER PROFILE:
+{json.dumps(profile, indent=2)}
+OPPORTUNITY:
+{json.dumps(opportunity, indent=2)}
+Return ONLY valid JSON in exactly this structure:
+{{
+  "opportunity_type": "",
+  "what_you_do": "",
+  "pay": "",
+  "deadline": "",
+  "cv_required": false,
+  "application_method": "",
+  "experience_required": "",
+  "certification_required": false,
+  "location_eligibility": "",
+  "eligibility_status": "eligible",
+  "risk_flags": [],
+  "time_to_money": "fast",
+  "match_score": 0,
+  "worth_pursuing": true,
+  "buggy_take": ""
+}}
+"""
+
+    try:
+        response = requests.post(
+            OPENROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/buggy-agent",
+                "X-Title": "Buggy Agent"
+            },
+            json={
+                "model": "google/gemma-2-9b-it:free",
+                "messages": [{"role": "user", "content": prompt}],
+                "response_format": {"type": "json_object"},
+                "max_tokens": 800
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        text = data["choices"][0]["message"]["content"].strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.endswith("```"):
+            text = text[:-3]
+        analysis = json.loads(text.strip())
+        opportunity["ai_analysis"] = analysis
+    except Exception as e:
+        # Automatically catch 402, connection errors, or rate limits and switch to local analysis
+        print(f"⚠️ API call skipped (Using local fallback engine): {e}")
+        opportunity["ai_analysis"] = generate_local_fallback(opportunity, profile)
+
     return opportunity
-
-def send_telegram(message):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    response = requests.post(
-        url,
-        json={
-            "chat_id": CHAT_ID,
-            "text": message,
-            "disable_web_page_preview": False,
-        },
-        timeout=30,
-    )
-    response.raise_for_status()
-
-def format_opportunity(opportunity, is_ai_analyzed=True):
-    title = opportunity.get("title", "Untitled opportunity")
-    url = opportunity.get("html_url") or opportunity.get("url") or ""
-    source = opportunity.get("source", "Unknown Source")
-    
-    if is_ai_analyzed:
-        ai = opportunity.get("ai_analysis", {})
-        opportunity_type = ai.get("opportunity_type", "Opportunity")
-        what_you_do = ai.get("what_you_do", opportunity.get("description", "No description available."))
-        pay = ai.get("pay", opportunity.get("reward") or opportunity.get("salary") or "Not specified")
-        deadline = ai.get("deadline", "None listed")
-        cv_required = "Yes" if ai.get("cv_required") else "No"
-        application_method = ai.get("application_method", "Unknown")
-        eligibility = ai.get("location_eligibility", "Not specified")
-        match_score = ai.get("match_score", 0)
-        buggy_take = ai.get("buggy_take", "Worth taking a closer look.")
-        time_to_money = ai.get("time_to_money", "unknown")
-        
-        speed = "⚡ QUICK MONEY" if time_to_money == "fast" else "🕐 MEDIUM TIMELINE" if time_to_money == "medium" else "👀 WORTH A LOOK"
-
-        return (
-            f"🐛 BUGGY FOUND SOMETHING (AI Verified)\n\n"
-            f"🎯 {title}\n"
-            f"📍 Source: {source}\n"
-            f"📦 Type: {opportunity_type}\n"
-            f"💰 Pay: {pay}\n"
-            f"📄 CV: {cv_required}\n"
-            f"⏰ Deadline: {deadline}\n\n"
-            f"🛠️ What you'll do:\n{what_you_do[:300]}\n\n"
-            f"🧠 Buggy's take:\n{buggy_take}\n"
-            f"🎯 Match: {match_score}% | {speed}\n\n"
-            f"🔗 {url}"
-        )
-    else:
-        # Basic listing for items beyond the top 5 (zero AI token cost)
-        desc = opportunity.get("description", "No description available.")
-        return (
-            f"🐛 BUGGY QUICK LEAD\n\n"
-            f"🎯 {title}\n"
-            f"📍 Source: {source}\n\n"
-            f"📝 Summary:\n{desc[:250]}...\n\n"
-            f"🔗 {url}"
-        )
-
-def main():
-    print("🐛 Buggy Agent starting...")
-    
-    github_opportunities = search_github_opportunities()
-    wwr_opportunities = search_wwr_opportunities()
-    hn_opportunities = search_hn_opportunities()
-    ai_opportunities = search_ai_task_opportunities()
-
-    all_opportunities = (
-        github_opportunities + 
-        wwr_opportunities + 
-        hn_opportunities + 
-        ai_opportunities
-    )
-
-    all_opportunities = filter_already_sent(all_opportunities)
-    worthwhile = filter_opportunities(all_opportunities, PROFILE)
-
-    print(f"🔎 Found {len(worthwhile)} items passing first-pass filter.")
-
-    # Hard cap workflow output to 10-15 results max
-    target_pool = worthwhile[:12]
-    
-    # Split into Top 5 for deep AI analysis and the rest for basic direct display
-    top_5 = target_pool[:5]
-    rest_items = target_pool[5:12]
-
-    final_alert_batch = []
-
-    print(f"🧠 Running deep AI analysis on top {len(top_5)} opportunities...")
-    for opportunity in top_5:
-        try:
-            opportunity = analyze_with_retry(opportunity, PROFILE)
-            ai_analysis = opportunity.get("ai_analysis", {})
-            # Evaluate via Strands or accept if worthwhile
-            decision = evaluate_opportunity(opportunity)
-            print(f"   - {opportunity['title']} => {decision}")
-            
-            if decision.upper().startswith("KEEP") or ai_analysis.get("worth_pursuing", True):
-                opportunity["_is_ai"] = True
-                final_alert_batch.append(opportunity)
-            time.sleep(1.0)
-        except Exception as error:
-            print(f"⚠️ Analysis skipped for {opportunity.get('title', 'Unknown')}: {error}")
-
-    # Add the remaining items as basic listings without hitting LLM APIs
-    print(f"📦 Adding {len(rest_items)} direct leads (no AI cost)...")
-    for opportunity in rest_items:
-        opportunity["_is_ai"] = False
-        final_alert_batch.append(opportunity)
-
-    print(f"📨 Sending {len(final_alert_batch)} total alerts to Telegram")
-
-    sent_objects = []
-    for opportunity in final_alert_batch:
-        is_ai = opportunity.get("_is_ai", False)
-        message = format_opportunity(opportunity, is_ai_analyzed=is_ai)
-        send_telegram(message)
-        sent_objects.append(opportunity)
-        print(f"✅ Sent: {opportunity['title']}")
-
-    mark_as_sent(sent_objects)
-    print("🐛 Buggy Agent finished.")
-
-if __name__ == "__main__":
-    main()
