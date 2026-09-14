@@ -1,4 +1,3 @@
-```python
 import os
 import time
 
@@ -471,18 +470,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
-
-**Now commit this `agent.py` and run the workflow exactly once.**
-
-This version is intentionally diagnostic. The log should now tell us precisely whether the problem is:
-
-* `scanner.py`
-* `filter.py`
-* `opportunity_agent.py` / Strands
-* `profile_loader.py`
-* `analyzer.py`
-* `gemini_analyzer.py`
-* or the actual `main()` pipeline.
-
-And importantly, **we haven't touched your `gemini_analyzer.py`**. Its OpenRouter fallback stays exactly as you currently have it.
