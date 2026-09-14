@@ -16,7 +16,6 @@ from history import filter_already_sent, mark_as_sent
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-MAX_ALERTS_PER_RUN = 10
 PROFILE = load_profile()
 
 def analyze_with_retry(opportunity, profile):
@@ -26,7 +25,7 @@ def analyze_with_retry(opportunity, profile):
             return analyze_with_gemini(opportunity, profile)
         except HTTPError as e:
             if e.response.status_code in [429, 503]:
-                wait_time = (2 ** attempt) * 2  # Exponential backoff: 2s, 4s, 8s
+                wait_time = (2 ** attempt) * 2
                 print(f"⚠️ Rate limited or server busy. Retrying in {wait_time}s...")
                 time.sleep(wait_time)
             else:
@@ -47,48 +46,49 @@ def send_telegram(message):
     )
     response.raise_for_status()
 
-def format_opportunity(opportunity):
-    ai = opportunity.get("ai_analysis", {})
+def format_opportunity(opportunity, is_ai_analyzed=True):
     title = opportunity.get("title", "Untitled opportunity")
-    opportunity_type = ai.get("opportunity_type", opportunity.get("opportunity_type", "Opportunity"))
-    what_you_do = ai.get("what_you_do", opportunity.get("description", "No description available."))
-    pay = ai.get("pay", opportunity.get("reward") or opportunity.get("salary") or "Not specified")
-    deadline = ai.get("deadline", opportunity.get("deadline") or "None listed")
-    cv_required = "Yes" if ai.get("cv_required") else "No"
-    application_method = ai.get("application_method", "Unknown")
-    eligibility = ai.get("location_eligibility", "Not specified")
-    match_score = ai.get("match_score", opportunity.get("match_score", 0))
-    buggy_take = ai.get("buggy_take", "Worth taking a closer look.")
-    time_to_money = ai.get("time_to_money", "unknown")
-    
-    if time_to_money == "fast":
-        speed = "⚡ QUICK MONEY"
-    elif time_to_money == "medium":
-        speed = "🕐 MEDIUM TIMELINE"
-    elif time_to_money == "slow":
-        speed = "🐢 SLOW BURN"
-    else:
-        speed = "👀 WORTH A LOOK"
-
     url = opportunity.get("html_url") or opportunity.get("url") or ""
+    source = opportunity.get("source", "Unknown Source")
     
-    return (
-        f"🐛 BUGGY FOUND SOMETHING\n\n"
-        f"🎯 {title}\n\n"
-        f"📦 Type: {opportunity_type}\n"
-        f"💰 Pay: {pay}\n"
-        f"📄 CV: {cv_required}\n"
-        f"📝 Application: {application_method}\n"
-        f"⏰ Deadline: {deadline}\n"
-        f"🌍 Eligibility: {eligibility}\n\n"
-        f"🛠️ What you'll do:\n"
-        f"{what_you_do[:400]}\n\n"
-        f"🧠 Buggy's take:\n"
-        f"{buggy_take}\n\n"
-        f"🎯 Match: {match_score}%\n"
-        f"{speed}\n\n"
-        f"🔗 {url}"
-    )
+    if is_ai_analyzed:
+        ai = opportunity.get("ai_analysis", {})
+        opportunity_type = ai.get("opportunity_type", "Opportunity")
+        what_you_do = ai.get("what_you_do", opportunity.get("description", "No description available."))
+        pay = ai.get("pay", opportunity.get("reward") or opportunity.get("salary") or "Not specified")
+        deadline = ai.get("deadline", "None listed")
+        cv_required = "Yes" if ai.get("cv_required") else "No"
+        application_method = ai.get("application_method", "Unknown")
+        eligibility = ai.get("location_eligibility", "Not specified")
+        match_score = ai.get("match_score", 0)
+        buggy_take = ai.get("buggy_take", "Worth taking a closer look.")
+        time_to_money = ai.get("time_to_money", "unknown")
+        
+        speed = "⚡ QUICK MONEY" if time_to_money == "fast" else "🕐 MEDIUM TIMELINE" if time_to_money == "medium" else "👀 WORTH A LOOK"
+
+        return (
+            f"🐛 BUGGY FOUND SOMETHING (AI Verified)\n\n"
+            f"🎯 {title}\n"
+            f"📍 Source: {source}\n"
+            f"📦 Type: {opportunity_type}\n"
+            f"💰 Pay: {pay}\n"
+            f"📄 CV: {cv_required}\n"
+            f"⏰ Deadline: {deadline}\n\n"
+            f"🛠️ What you'll do:\n{what_you_do[:300]}\n\n"
+            f"🧠 Buggy's take:\n{buggy_take}\n"
+            f"🎯 Match: {match_score}% | {speed}\n\n"
+            f"🔗 {url}"
+        )
+    else:
+        # Basic listing for items beyond the top 5 (zero AI token cost)
+        desc = opportunity.get("description", "No description available.")
+        return (
+            f"🐛 BUGGY QUICK LEAD\n\n"
+            f"🎯 {title}\n"
+            f"📍 Source: {source}\n\n"
+            f"📝 Summary:\n{desc[:250]}...\n\n"
+            f"🔗 {url}"
+        )
 
 def main():
     print("🐛 Buggy Agent starting...")
@@ -105,60 +105,53 @@ def main():
         ai_opportunities
     )
 
-    # Filter out items we've already alerted on previously
     all_opportunities = filter_already_sent(all_opportunities)
-
-    print(
-        f"🔎 Found {len(github_opportunities)} GitHub, "
-        f"{len(wwr_opportunities)} WWR, "
-        f"{len(hn_opportunities)} HN, and "
-        f"{len(ai_opportunities)} AI task opportunities"
-    )
-
     worthwhile = filter_opportunities(all_opportunities, PROFILE)
+
+    print(f"🔎 Found {len(worthwhile)} items passing first-pass filter.")
+
+    # Hard cap workflow output to 10-15 results max
+    target_pool = worthwhile[:12]
     
-    worthwhile = [analyze_opportunity(opportunity) for opportunity in worthwhile]
-    worthwhile = [opportunity for opportunity in worthwhile if opportunity.get("analysis", {}).get("worth_pursuing")]
+    # Split into Top 5 for deep AI analysis and the rest for basic direct display
+    top_5 = target_pool[:5]
+    rest_items = target_pool[5:12]
 
-    print(f"🧠 After first-pass filtering: {len(worthwhile)} worthwhile opportunities")
+    final_alert_batch = []
 
-    analyzed_opportunities = []
-    for opportunity in worthwhile:
+    print(f"🧠 Running deep AI analysis on top {len(top_5)} opportunities...")
+    for opportunity in top_5:
         try:
             opportunity = analyze_with_retry(opportunity, PROFILE)
             ai_analysis = opportunity.get("ai_analysis", {})
-            if ai_analysis.get("worth_pursuing", False):
-                analyzed_opportunities.append(opportunity)
-            time.sleep(1.5)
+            # Evaluate via Strands or accept if worthwhile
+            decision = evaluate_opportunity(opportunity)
+            print(f"   - {opportunity['title']} => {decision}")
+            
+            if decision.upper().startswith("KEEP") or ai_analysis.get("worth_pursuing", True):
+                opportunity["_is_ai"] = True
+                final_alert_batch.append(opportunity)
+            time.sleep(1.0)
         except Exception as error:
-            print(f"⚠️ Gemini analysis failed for {opportunity.get('title', 'Unknown')}: {error}")
+            print(f"⚠️ Analysis skipped for {opportunity.get('title', 'Unknown')}: {error}")
 
-    worthwhile = analyzed_opportunities
-    print(f"🤖 After Gemini analysis: {len(worthwhile)} worthwhile opportunities")
+    # Add the remaining items as basic listings without hitting LLM APIs
+    print(f"📦 Adding {len(rest_items)} direct leads (no AI cost)...")
+    for opportunity in rest_items:
+        opportunity["_is_ai"] = False
+        final_alert_batch.append(opportunity)
 
-    selected = worthwhile[:MAX_ALERTS_PER_RUN]
-    approved = []
-    
-    for opportunity in selected:
-        decision = evaluate_opportunity(opportunity)
-        print()
-        print(f"🧠 Buggy evaluated: {opportunity['title']}")
-        print(f"   {decision}")
-        
-        if decision.upper().startswith("KEEP"):
-            approved.append(opportunity)
+    print(f"📨 Sending {len(final_alert_batch)} total alerts to Telegram")
 
-    selected = approved
-    print(f"📨 Sending {len(selected)} alerts to Telegram")
-
-    for opportunity in selected:
-        message = format_opportunity(opportunity)
+    sent_objects = []
+    for opportunity in final_alert_batch:
+        is_ai = opportunity.get("_is_ai", False)
+        message = format_opportunity(opportunity, is_ai_analyzed=is_ai)
         send_telegram(message)
+        sent_objects.append(opportunity)
         print(f"✅ Sent: {opportunity['title']}")
 
-    # Record these IDs so they won't trigger alerts again
-    mark_as_sent(selected)
-
+    mark_as_sent(sent_objects)
     print("🐛 Buggy Agent finished.")
 
 if __name__ == "__main__":
