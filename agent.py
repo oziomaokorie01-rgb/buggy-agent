@@ -246,9 +246,11 @@ def main():
 
     print("🔎 Searching GitHub...")
 
-    github_opportunities = (
-        search_github_opportunities()
-    )
+    try:
+        github_opportunities = search_github_opportunities()
+    except Exception as error:  # pragma: no cover - defense in depth
+        print(f"⚠️ GitHub search raised unexpectedly: {error}")
+        github_opportunities = []
 
     print(
         f"🔎 Found "
